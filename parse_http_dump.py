@@ -5,8 +5,12 @@ mitmdumpの出力から、instagramとの通信を抜き出し、
 
 import re
 import json
-import mitmproxy.io
+import csv
+import io
 import argparse
+import os
+import shutil
+import mitmproxy.io
 
 class Media(object):
     def __init__(self, id, owner, likes, thumbnails):
@@ -104,6 +108,56 @@ class MediaThumbHandler(FlowHandler):
                 owner=media.owner, content=flow.response.content
             )
 
+class CompoundHandler(FlowHandler):
+    def __init__(self, *handlers):
+        self.__handlers = handlers
+
+    def can_accept(self, flow):
+        return any(map(lambda h: h.can_accept(flow), self.__handlers))
+
+    def handle(self, flow):
+        for h in self.__handlers:
+            if h.can_accept(flow):
+                h.handle(flow)
+
+def extract_instagram_data_from_dump_file(
+        dump_file_path, user_file_path, media_file_path, image_dir_path):
+    user_handler = UserHandler()
+    media_handler = MediaThumbHandler(user_handler.users, user_handler.thumbnails)
+    handler = CompoundHandler(user_handler, media_handler)
+    handler.handle_stream_file(dump_file_path)
+
+    image_paths = save_imgs(media_handler.images, image_dir_path)
+    save_media_data(media_handler.images, image_paths, media_file_path)
+
+    save_user_data(user_handler.users, user_file_path)
+
+# TODO: 画像データはjpgが前提になっているので、必要であれば直す
+def save_imgs(images, image_dir_path):
+    image_paths = {}
+    for img in images.values():
+        outpath = os.path.join(image_dir_path, '{}.jpg'.format(img.id))
+        image_paths[img.id] = outpath
+        with open(outpath, 'wb') as fout:
+            fin = io.BytesIO(img.content)
+            shutil.copyfileobj(fin, fout)
+    return image_paths
+
+def save_media_data(images, image_paths, media_file_path):
+    with open(media_file_path, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow('id likes owner path'.split())
+        for img in images.values():
+            path = image_paths.get(img.id, "")
+            writer.writerow([img.id, img.likes, img.owner, path])
+
+def save_user_data(users, user_file_path):
+    with open(user_file_path, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow('id name followed_by'.split())
+        for user in users.values():
+            writer.writerow([user.id, user.name, user.followed_by])
+
 def main():
     argparser = argparse.ArgumentParser(
         description='mitmdumpの出力からインスタの画像を収集する'
@@ -117,10 +171,12 @@ def main():
     argparser.add_argument('-d', metavar='IMAGE_DIR_PATH', required=True,
                            help='収集した画像を保存するディレクトリのパス')
     args = argparser.parse_args()
-    print(args)
-    print('-f {dump} -u {user} -m {media} -d {image}'.format(
-        dump=args.f, user=args.u, media=args.m, image=args.d
-    ))
+    extract_instagram_data_from_dump_file(
+        dump_file_path=args.f,
+        user_file_path=args.u,
+        media_file_path=args.m,
+        image_dir_path=args.d
+    )
 
 if __name__ == '__main__':
     main()
