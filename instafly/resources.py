@@ -3,6 +3,8 @@ import csv
 from keras.preprocessing import image
 import numpy as np
 
+from . import config
+
 class Metadata(object):
     def __init__(self, path, like_rate):
         self.path = path
@@ -23,12 +25,12 @@ def flow_metadata(csv_path):
                 like_rate=row_dict['like_rate']
             )
 
-def load_images(csv_path, img_base_dir, img_shape):
+def load_images(csv_path, img_base_dir):
     X = []
     Y = []
     for meta in flow_metadata(csv_path):
         path = os.path.join(img_base_dir, meta.path)
-        img = image.load_img(path, target_size=img_shape)
+        img = image.load_img(path, target_size=(config.IMG_WIDTH, config.IMG_HEIGHT))
         img = image.img_to_array(img).astype('float32')
         img /= 255
         X.append(img)

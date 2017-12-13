@@ -2,15 +2,16 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.applications.vgg16 import VGG16
 
+from . import config
+
 NUM_HIDDEN = 16
 NUM_CHANNELS = 3
 DEFAULT_ACTIVATION='relu'
 
-def create_model(input_shape):
-    width, height = input_shape
+def create_model():
     model = Sequential()
     vgg16 = VGG16(
-        input_shape=(width, height, NUM_CHANNELS),
+        input_shape=(config.IMG_WIDTH, config.IMG_HEIGHT, NUM_CHANNELS),
         include_top=False,
         weights='imagenet'
     )
