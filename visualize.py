@@ -1,8 +1,9 @@
 import abc
+import argparse
 
 import keras.backend as K
 import numpy as np
-from keras.preprocessing.image import array_to_img
+from keras.preprocessing import image
 from keras.models import load_model
 from keras.optimizers import SGD
 
@@ -67,10 +68,10 @@ class Minimizer(object, metaclass=abc.ABCMeta):
 
         return X
 
-
 class ImageVisualizer(Minimizer):
-    def __init__(self, model, **kwargs):
+    def __init__(self, model, initial_image=None, **kwargs):
         self._model = model
+        self._initial_image = initial_image
         super().__init__(**kwargs)
 
     def get_input(self):
@@ -81,17 +82,46 @@ class ImageVisualizer(Minimizer):
         return -self._model.layers[-2].output
 
     def create_initial_input(self):
-        return np.random.random((1, config.IMG_WIDTH, config.IMG_HEIGHT, 3))
+        if self._initial_image is None:
+            return np.random.random((1, config.IMG_WIDTH, config.IMG_HEIGHT, 3))
+        else:
+            return self._initial_image
 
 def main():
-    model = load_model('../instafly-resources/weights.h5')
+    parser = argparse.ArgumentParser(
+        description='インスタ映えする画像を生成する'
+    )
+    parser.add_argument(
+        '-i', metavar='INPUT_IMAGE', default=None
+    )
+    parser.add_argument(
+        '-w', metavar='WEIGHT_FILE', required=True
+    )
+    parser.add_argument(
+        '-o', metavar='OUTPUT_FILE', required=True
+    )
+    parser.add_argument(
+        '-n', metavar='NUM_LOOPS', default=500
+    )
+    args = parser.parse_args()
+
+    initial_image = None
+    if args.i is not None:
+        img = image.load_img(args.i, target_size=(config.IMG_WIDTH, config.IMG_HEIGHT))
+        img = image.img_to_array(img).astype('float32')
+        img /= 255
+        initial_image = np.array([img])
+
+    model = load_model(args.w)
+
     visualizer = ImageVisualizer(
         model,
-        updator=MomentumUpdator(lr=10)
+        initial_image=initial_image,
+        updator=MomentumUpdator(lr=10.0)
     )
-    img = visualizer.minimize_loss(num_loops=500)[0]
-    img = array_to_img(img)
-    img.save('output.png')
+    img = visualizer.minimize_loss(num_loops=int(args.n))[0]
+    img = image.array_to_img(img)
+    img.save(args.o)
 
 if __name__ == '__main__':
     main()

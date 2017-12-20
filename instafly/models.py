@@ -24,7 +24,7 @@ def create_model():
     model.add(Dense(NUM_HIDDEN))
     model.add(Activation(DEFAULT_ACTIVATION))
     model.add(Dense(1))
-    model.add(Activation('sigmoid'))
+    model.add(Activation('relu'))
 
     model.compile(
         loss='mse',
